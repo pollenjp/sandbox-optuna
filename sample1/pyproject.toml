@@ -12,6 +12,7 @@ python = "^3.7"
 pytorch-lightning = "^1.5.5"
 albumentations = "^1.1.0"
 optuna = "^2.10.0"
+optuna-dashboard = "^0.5.0"
 
 [tool.poetry.dev-dependencies]
 black = "^21.12b0"

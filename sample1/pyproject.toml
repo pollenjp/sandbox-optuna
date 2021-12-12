@@ -1,0 +1,28 @@
+[tool.black]
+line-length = 120
+
+[tool.poetry]
+name = "sample1"
+version = "0.1.0"
+description = ""
+authors = ["pollenjp <polleninjp@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+pytorch-lightning = "^1.5.5"
+albumentations = "^1.1.0"
+optuna = "^2.10.0"
+
+[tool.poetry.dev-dependencies]
+black = "^21.12b0"
+flake8 = "^4.0.1"
+isort = "^5.10.1"
+mypy = "^0.910"
+poethepoet = "^0.11.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poe.tasks]
+force-cuda113 = "pip3 install torch==1.10.0+cu113 torchvision==0.11.1+cu113 torchaudio==0.10.0+cu113 -f https://download.pytorch.org/whl/cu113/torch_stable.html"

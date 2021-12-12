@@ -1,18 +1,7 @@
-"""
-Optuna example that optimizes multi-layer perceptrons using PyTorch Lightning.
-
-In this example, we optimize the validation accuracy of hand-written digit recognition using
-PyTorch Lightning, and FashionMNIST. We optimize the neural network architecture. As it is too time
-consuming to use the whole FashionMNIST dataset, we here use a small subset of it.
-
-You can run this example as follows, pruning can be turned on and off with the `--pruning`
-argument.
-    $ python pytorch_lightning_simple.py [--pruning]
-
-"""
 # Standard Library
 import argparse
 import os
+from typing import Callable
 from typing import List
 from typing import Optional
 
@@ -33,16 +22,9 @@ from torchvision import transforms
 if version.parse(pl.__version__) < version.parse("1.0.2"):
     raise RuntimeError("PyTorch Lightning>=1.0.2 is required for this example.")
 
-PERCENT_VALID_EXAMPLES = 0.1
-BATCHSIZE = 128
-CLASSES = 10
-EPOCHS = 10
-DIR = os.getcwd()
-NUM_WORKERS: int = 4
-
 
 class Net(nn.Module):
-    def __init__(self, dropout: float, output_dims: List[int]):
+    def __init__(self, dropout: float, output_dims: List[int], num_classes: int):
         super().__init__()
         layers: List[nn.Module] = []
 
@@ -53,7 +35,7 @@ class Net(nn.Module):
             layers.append(nn.Dropout(dropout))
             input_dim = output_dim
 
-        layers.append(nn.Linear(input_dim, CLASSES))
+        layers.append(nn.Linear(input_dim, num_classes))
 
         self.layers: nn.Module = nn.Sequential(*layers)
 
@@ -63,9 +45,9 @@ class Net(nn.Module):
 
 
 class LightningNet(pl.LightningModule):
-    def __init__(self, dropout: float, output_dims: List[int]):
+    def __init__(self, dropout: float, output_dims: List[int], num_classes: int):
         super().__init__()
-        self.model = Net(dropout, output_dims)
+        self.model = Net(dropout, output_dims, num_classes)
 
     def forward(self, data: torch.Tensor) -> torch.Tensor:
         return self.model(data.view(-1, 28 * 28))
@@ -88,10 +70,11 @@ class LightningNet(pl.LightningModule):
 
 
 class FashionMNISTDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir: str, batch_size: int):
+    def __init__(self, data_dir: str, batch_size: int, num_workers: int = 0):
         super().__init__()
         self.data_dir = data_dir
         self.batch_size = batch_size
+        self.num_workers: int = num_workers
 
     def setup(self, stage: Optional[str] = None) -> None:
         self.mnist_test = datasets.FashionMNIST(
@@ -102,43 +85,53 @@ class FashionMNISTDataModule(pl.LightningDataModule):
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(
-            self.mnist_train, batch_size=self.batch_size, num_workers=NUM_WORKERS, shuffle=True, pin_memory=True
+            self.mnist_train, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=True, pin_memory=True
         )
 
     def val_dataloader(self) -> DataLoader:
         return DataLoader(
-            self.mnist_val, batch_size=self.batch_size, num_workers=NUM_WORKERS, shuffle=False, pin_memory=True
+            self.mnist_val, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=False, pin_memory=True
         )
 
     def test_dataloader(self) -> DataLoader:
         return DataLoader(
-            self.mnist_test, batch_size=self.batch_size, num_workers=NUM_WORKERS, shuffle=False, pin_memory=True
+            self.mnist_test, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=False, pin_memory=True
         )
 
 
-def objective(trial: optuna.trial.Trial) -> float:
+def create_objective() -> Callable[[optuna.trial.Trial], float]:
+    PERCENT_VALID_EXAMPLES = 0.1
+    BATCHSIZE = 128
+    CLASSES = 10
+    EPOCHS = 10
+    DIR = os.getcwd()
+    NUM_WORKERS: int = 2
 
-    # We optimize the number of layers, hidden units in each layer and dropouts.
-    n_layers = trial.suggest_int("n_layers", 1, 3)
-    dropout = trial.suggest_float("dropout", 0.2, 0.5)
-    output_dims = [trial.suggest_int("n_units_l{}".format(i), 4, 128, log=True) for i in range(n_layers)]
+    def objective(trial: optuna.trial.Trial) -> float:
 
-    model = LightningNet(dropout, output_dims)
-    datamodule = FashionMNISTDataModule(data_dir=DIR, batch_size=BATCHSIZE)
+        # We optimize the number of layers, hidden units in each layer and dropouts.
+        n_layers = trial.suggest_int("n_layers", 1, 3)
+        dropout = trial.suggest_float("dropout", 0.2, 0.5)
+        output_dims = [trial.suggest_int("n_units_l{}".format(i), 4, 128, log=True) for i in range(n_layers)]
 
-    trainer = pl.Trainer(
-        logger=True,
-        limit_val_batches=PERCENT_VALID_EXAMPLES,
-        checkpoint_callback=False,
-        max_epochs=EPOCHS,
-        gpus=1 if torch.cuda.is_available() else None,
-        callbacks=[PyTorchLightningPruningCallback(trial, monitor="val_acc")],
-    )
-    hyperparameters = dict(n_layers=n_layers, dropout=dropout, output_dims=output_dims)
-    trainer.logger.log_hyperparams(hyperparameters)
-    trainer.fit(model, datamodule=datamodule)
+        model = LightningNet(dropout, output_dims, num_classes=CLASSES)
+        datamodule = FashionMNISTDataModule(data_dir=DIR, batch_size=BATCHSIZE, num_workers=NUM_WORKERS)
 
-    return trainer.callback_metrics["val_acc"].item()
+        trainer = pl.Trainer(
+            logger=True,
+            limit_val_batches=PERCENT_VALID_EXAMPLES,
+            checkpoint_callback=False,
+            max_epochs=EPOCHS,
+            gpus=1 if torch.cuda.is_available() else None,
+            callbacks=[PyTorchLightningPruningCallback(trial, monitor="val_acc")],
+        )
+        hyperparameters = dict(n_layers=n_layers, dropout=dropout, output_dims=output_dims)
+        trainer.logger.log_hyperparams(hyperparameters)
+        trainer.fit(model, datamodule=datamodule)
+
+        return trainer.callback_metrics["val_acc"].item()
+
+    return objective
 
 
 if __name__ == "__main__":
@@ -152,10 +145,18 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    pruner: optuna.pruners.BasePruner = optuna.pruners.MedianPruner() if args.pruning else optuna.pruners.NopPruner()
+    pruner: optuna.pruners.BasePruner = optuna.pruners.NopPruner()  # optuna.pruners.MedianPruner()
+    sampler = optuna.samplers.TPESampler()
 
-    study = optuna.create_study(direction="maximize", pruner=pruner)
-    study.optimize(objective, n_trials=100, timeout=600)
+    study = optuna.create_study(
+        study_name="my-study",
+        sampler=sampler,
+        direction=optuna.study.StudyDirection.MAXIMIZE,
+        storage="sqlite:///my-storage.db",
+        pruner=pruner,
+        load_if_exists=True,
+    )
+    study.optimize(create_objective(), n_trials=100, timeout=800)
 
     print("Number of finished trials: {}".format(len(study.trials)))
 

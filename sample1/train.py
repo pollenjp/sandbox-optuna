@@ -110,9 +110,9 @@ def create_objective() -> Callable[[optuna.trial.Trial], float]:
     def objective(trial: optuna.trial.Trial) -> float:
 
         # We optimize the number of layers, hidden units in each layer and dropouts.
-        n_layers = trial.suggest_int("n_layers", 1, 3)
+        n_layers = trial.suggest_int("n_layers", 1, 5)
         dropout = trial.suggest_float("dropout", 0.2, 0.5)
-        output_dims = [trial.suggest_int("n_units_l{}".format(i), 4, 128, log=True) for i in range(n_layers)]
+        output_dims = [trial.suggest_int("n_units_l{}".format(i), 4, 256, log=True) for i in range(n_layers)]
 
         model = LightningNet(dropout, output_dims, num_classes=CLASSES)
         datamodule = FashionMNISTDataModule(data_dir=DIR, batch_size=BATCHSIZE, num_workers=NUM_WORKERS)
@@ -135,16 +135,6 @@ def create_objective() -> Callable[[optuna.trial.Trial], float]:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="PyTorch Lightning example.")
-    parser.add_argument(
-        "--pruning",
-        "-p",
-        action="store_true",
-        help="Activate the pruning feature. `MedianPruner` stops unpromising "
-        "trials at the early stages of training.",
-    )
-    args = parser.parse_args()
-
     pruner: optuna.pruners.BasePruner = optuna.pruners.NopPruner()  # optuna.pruners.MedianPruner()
     sampler = optuna.samplers.TPESampler()
 
@@ -156,7 +146,7 @@ if __name__ == "__main__":
         pruner=pruner,
         load_if_exists=True,
     )
-    study.optimize(create_objective(), n_trials=100, timeout=800)
+    study.optimize(create_objective(), n_trials=200, timeout=600)
 
     print("Number of finished trials: {}".format(len(study.trials)))
 

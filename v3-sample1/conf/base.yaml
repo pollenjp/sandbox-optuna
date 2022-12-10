@@ -1,0 +1,9 @@
+---
+hydra:
+  run:
+    dir: ${log_root_path}
+  job:
+    chdir: false
+log_root_path: logs/${hydra:job.name}/${now:%Y-%m-%dT%H%M%S}
+param1: 1.0
+param2: 2.0

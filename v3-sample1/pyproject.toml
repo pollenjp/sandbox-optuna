@@ -44,6 +44,7 @@ packages = [{include = "v3_sample1"}]
 [tool.poetry.dependencies]
 python = ">=3.10,<3.11"
 hydra-core = "^1.3.0"
+optuna = "^3.0.4"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -54,6 +55,7 @@ isort = "^5.10.1"
 mypy = "^0.991"
 nox = "^2022.11.21"
 pytest = "^7.2.0"
+optuna-dashboard = "^0.8.0"
 
 [build-system]
 requires = ["poetry-core"]

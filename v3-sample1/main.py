@@ -1,14 +1,23 @@
 # Standard Library
+import random
 import typing as t
 from collections.abc import MutableMapping
 from collections.abc import MutableSequence
 from dataclasses import dataclass
+from logging import NullHandler
+from logging import getLogger
 from pathlib import Path
 
 # Third Party Library
 import hydra
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
+
+# First Party Library
+from utils import ScoreSender
+
+logger = getLogger(__name__)
+logger.addHandler(NullHandler())
 
 
 def assert_sequence_config(cfg: MutableSequence[t.Any]) -> None:
@@ -46,8 +55,25 @@ def main(cfg: DictConfig) -> None:
     config = t.cast(Config, cfg)
     del cfg
 
-    print(OmegaConf.to_yaml(config))
+    logger.info(OmegaConf.to_yaml(config))
+
+    log_root_path = Path(config.log_root_path).expanduser()
+
+    # TODO: fit model
+
+    # save score
+    score = random.random()
+    ScoreSender.save_score(log_root_path, score)
 
 
 if __name__ == "__main__":
+    # Standard Library
+    import logging
+
+    logging.basicConfig(
+        format="[%(asctime)s][%(levelname)s][%(filename)s:%(lineno)d] - %(message)s",
+        level=logging.WARNING,
+    )
+    logger.setLevel(logging.INFO)
+
     main()
